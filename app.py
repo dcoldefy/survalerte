@@ -64,9 +64,10 @@ class RadarApp(tk.Tk):
         self._demander_reglages()
 
     def _demander_reglages(self):
-        dlg = DialogueReglages(self)
+        dlg = DialogueReglages(self, rayon=self.rayon_km.get())
         self.wait_window(dlg)
         if dlg.result:
+            self.rayon_km.set(dlg.result["rayon"])
             _config.ALT_MIN_LEGALE  = dlg.result["alt_min"]
             _config.HEURE_NUIT_DEB  = dlg.result["nuit_deb"]
             _config.HEURE_NUIT_FIN  = dlg.result["nuit_fin"]

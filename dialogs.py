@@ -353,7 +353,7 @@ class MenuContextuel(tk.Menu):
 
 class DialogueReglages(tk.Toplevel):
 
-    def __init__(self, parent):
+    def __init__(self, parent, rayon=3):
         super().__init__(parent)
         self.title("Paramètres de surveillance")
         self.resizable(False, False)
@@ -362,13 +362,13 @@ class DialogueReglages(tk.Toplevel):
         self.result = None
         self.configure(bg="#F8F8F6")
         self.update_idletasks()
-        w, h = 440, 290
+        w, h = 440, 330
         x = parent.winfo_x() + (parent.winfo_width()  - w) // 2
         y = parent.winfo_y() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
-        self._build()
+        self._build(rayon)
 
-    def _build(self):
+    def _build(self, rayon):
         hdr = tk.Frame(self, bg="#1D9E75", pady=12, padx=20)
         hdr.pack(fill="x")
         tk.Label(hdr, text="Paramètres de surveillance",
@@ -380,7 +380,8 @@ class DialogueReglages(tk.Toplevel):
         form.pack(fill="both", expand=True)
 
         labels = [
-            ("Altitude minimum légale (m) :",       "spin_alt",  0, 5000, 50,  config.ALT_MIN_LEGALE),
+            ("Rayon de surveillance (km) :",        "spin_ray",  1,   50,  1,  rayon),
+            ("Altitude minimum légale (m) :",        "spin_alt",  0, 5000, 50,  config.ALT_MIN_LEGALE),
             ("Début des restrictions nocturnes (h):", "spin_deb", 0,   23,  1,  config.HEURE_NUIT_DEB),
             ("Fin des restrictions nocturnes (h) :", "spin_fin",  0,   23,  1,  config.HEURE_NUIT_FIN),
         ]
@@ -408,6 +409,7 @@ class DialogueReglages(tk.Toplevel):
 
     def _valider(self):
         try:
+            rayon    = int(self.spin_ray.get())
             alt_min  = int(self.spin_alt.get())
             nuit_deb = int(self.spin_deb.get())
             nuit_fin = int(self.spin_fin.get())
@@ -415,5 +417,6 @@ class DialogueReglages(tk.Toplevel):
             messagebox.showwarning("Valeur invalide",
                 "Veuillez entrer des valeurs numériques.", parent=self)
             return
-        self.result = {"alt_min": alt_min, "nuit_deb": nuit_deb, "nuit_fin": nuit_fin}
+        self.result = {"rayon": rayon, "alt_min": alt_min,
+                       "nuit_deb": nuit_deb, "nuit_fin": nuit_fin}
         self.destroy()
