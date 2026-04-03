@@ -19,7 +19,7 @@ Application Windows de surveillance des survols aériens au-dessus de votre comm
 Pas besoin de Python ni de ligne de commande :
 
 1. Allez dans [**Releases**](https://github.com/dcoldefy/survalerte/releases/latest)
-2. Téléchargez **RadarSurvolConflans.exe**
+2. Téléchargez **SurvAlerte.exe**
 3. Double-cliquez sur le fichier pour lancer l'application
 
 > Si Windows affiche un avertissement "application inconnue", cliquez sur **"Informations complémentaires"** puis **"Exécuter quand même"**.
