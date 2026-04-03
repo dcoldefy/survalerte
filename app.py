@@ -327,6 +327,9 @@ class RadarApp(tk.Tk):
         if not item:
             self.tooltip.place_forget()
             return
+        # Convertir en coordonnées relatives à la fenêtre principale
+        wx = event.x_root - self.winfo_rootx() + 16
+        wy = event.y_root - self.winfo_rooty() + 10
         vals = self.tree.item(item, "values")
         statut = vals[10] if len(vals) > 10 else ""
         if statut and statut != "-":
@@ -335,10 +338,12 @@ class RadarApp(tk.Tk):
                 if r[3] == icao and r[1] == heure and r[13]:
                     msg = r[13]
                     break
+            msg += "\n\n→ Clic droit pour plus d'options"
             self.tooltip.config(text=msg)
-            self.tooltip.place(x=event.x + 16, y=event.y - 10)
+            self.tooltip.place(x=wx, y=wy)
         else:
-            self.tooltip.place_forget()
+            self.tooltip.config(text="→ Clic droit pour plus d'options")
+            self.tooltip.place(x=wx, y=wy)
 
     # ---- Enregistrement / scan ----------------------------------------------
 

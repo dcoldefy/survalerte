@@ -11,7 +11,7 @@ import config
 from config import DESTINATAIRES
 from api import chercher_communes
 from database import save_profil
-from pdf import generer_plainte_pdf
+from pdf import generer_plainte_pdf, generer_plainte_word
 from utils import majuscules
 
 
@@ -302,9 +302,20 @@ class MenuContextuel(tk.Menu):
             label=f"Suivre {ref} sur Flightradar24",
             command=self._ouvrir_flightradar)
         self.add_separator()
-        self.add_command(
-            label="Generer une plainte PDF pour ce vol",
-            command=self._choisir_destinataire,
+        submenu_plainte = tk.Menu(self, tearoff=0, font=("Segoe UI", 9))
+        submenu_plainte.add_command(
+            label="PDF",
+            command=lambda: self._choisir_destinataire("pdf"))
+        submenu_plainte.add_command(
+            label="Word (.docx)",
+            command=lambda: self._choisir_destinataire("word"))
+        submenu_plainte.add_separator()
+        submenu_plainte.add_command(
+            label="PDF + Word",
+            command=lambda: self._choisir_destinataire("both"))
+        self.add_cascade(
+            label="Generer une plainte pour ce vol",
+            menu=submenu_plainte,
             foreground="#A32D2D")
 
     def _ouvrir_flightradar(self):
@@ -319,7 +330,7 @@ class MenuContextuel(tk.Menu):
             url = "https://www.flightradar24.com/"
         webbrowser.open(url)
 
-    def _choisir_destinataire(self):
+    def _choisir_destinataire(self, format_doc="pdf"):
         if not self.profil:
             messagebox.showwarning("Profil manquant",
                 "Veuillez d'abord renseigner votre profil.")
@@ -339,11 +350,19 @@ class MenuContextuel(tk.Menu):
             dest["cp_ville"] = f"{cp} {ville}".strip()
 
         try:
-            chemin = generer_plainte_pdf(self.profil, self.vol, dest)
-            os.startfile(chemin)
+            chemins = []
+            if format_doc in ("pdf", "both"):
+                chemins.append(generer_plainte_pdf(self.profil, self.vol, dest))
+            if format_doc in ("word", "both"):
+                chemins.append(generer_plainte_word(self.profil, self.vol, dest))
+
+            for c in chemins:
+                os.startfile(c)
+
+            noms = "\n".join(chemins)
             messagebox.showinfo("Plainte generee",
-                f"Document PDF cree sur votre Bureau :\n\n{chemin}\n\n"
-                f"Il s'ouvre automatiquement. Imprimez-le et signez-le.")
+                f"Document(s) cree(s) sur votre Bureau :\n\n{noms}\n\n"
+                f"Ils s'ouvrent automatiquement. Imprimez-les et signez-les.")
         except RuntimeError as e:
             messagebox.showerror("Module manquant", str(e))
         except Exception as e:
