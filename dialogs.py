@@ -7,6 +7,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+import config
 from config import DESTINATAIRES
 from api import chercher_communes
 from database import save_profil
@@ -346,3 +347,73 @@ class MenuContextuel(tk.Menu):
             messagebox.showerror("Module manquant", str(e))
         except Exception as e:
             messagebox.showerror("Erreur", f"Impossible de generer la plainte :\n{e}")
+
+
+# ---- Dialogue réglages de surveillance --------------------------------------
+
+class DialogueReglages(tk.Toplevel):
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Paramètres de surveillance")
+        self.resizable(False, False)
+        self.grab_set()
+        self.focus_force()
+        self.result = None
+        self.configure(bg="#F8F8F6")
+        self.update_idletasks()
+        w, h = 440, 290
+        x = parent.winfo_x() + (parent.winfo_width()  - w) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - h) // 2
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self._build()
+
+    def _build(self):
+        hdr = tk.Frame(self, bg="#1D9E75", pady=12, padx=20)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="Paramètres de surveillance",
+                 font=("Segoe UI", 12, "bold"), bg="#1D9E75", fg="#FFFFFF").pack(anchor="w")
+        tk.Label(hdr, text="Définissez les seuils de détection des infractions.",
+                 font=("Segoe UI", 8), bg="#1D9E75", fg="#B5EDD9").pack(anchor="w")
+
+        form = tk.Frame(self, bg="#F8F8F6", padx=24, pady=16)
+        form.pack(fill="both", expand=True)
+
+        labels = [
+            ("Altitude minimum légale (m) :",       "spin_alt",  0, 5000, 50,  config.ALT_MIN_LEGALE),
+            ("Début des restrictions nocturnes (h):", "spin_deb", 0,   23,  1,  config.HEURE_NUIT_DEB),
+            ("Fin des restrictions nocturnes (h) :", "spin_fin",  0,   23,  1,  config.HEURE_NUIT_FIN),
+        ]
+        for row, (lbl, attr, frm, to, inc, val) in enumerate(labels):
+            tk.Label(form, text=lbl, font=("Segoe UI", 9),
+                     bg="#F8F8F6", fg="#444").grid(row=row, column=0, sticky="w", pady=8)
+            spin = tk.Spinbox(form, from_=frm, to=to, increment=inc,
+                              font=("Segoe UI", 10), width=8, relief="flat",
+                              highlightthickness=1, highlightbackground="#CCCCCC")
+            spin.delete(0, tk.END)
+            spin.insert(0, str(val))
+            spin.grid(row=row, column=1, sticky="w", padx=(16, 0), pady=8)
+            setattr(self, attr, spin)
+
+        bf = tk.Frame(self, bg="#F8F8F6", padx=24, pady=10)
+        bf.pack(fill="x", side="bottom")
+        tk.Button(bf, text="Valider",
+                  command=self._valider,
+                  font=("Segoe UI", 10, "bold"),
+                  bg="#1D9E75", fg="white",
+                  activebackground="#0F6E56",
+                  relief="flat", padx=20, pady=6,
+                  cursor="hand2").pack(side="right")
+        self.bind("<Return>", lambda e: self._valider())
+
+    def _valider(self):
+        try:
+            alt_min  = int(self.spin_alt.get())
+            nuit_deb = int(self.spin_deb.get())
+            nuit_fin = int(self.spin_fin.get())
+        except ValueError:
+            messagebox.showwarning("Valeur invalide",
+                "Veuillez entrer des valeurs numériques.", parent=self)
+            return
+        self.result = {"alt_min": alt_min, "nuit_deb": nuit_deb, "nuit_fin": nuit_fin}
+        self.destroy()

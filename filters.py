@@ -2,7 +2,7 @@
 Filtrage des aéronefs et analyse réglementaire des infractions.
 """
 
-from config import ALT_MIN_LEGALE, HEURE_NUIT_DEB, HEURE_NUIT_FIN
+import config
 
 
 def est_avion_de_ligne(indicatif, vitesse_kmh, categorie=None):
@@ -53,17 +53,20 @@ def analyser_infraction(alt_m, heure_str, au_sol):
     """
     if au_sol:
         return None, ""
-    infr_alt = (alt_m is not None and alt_m < ALT_MIN_LEGALE)
+    infr_alt = (alt_m is not None and alt_m < config.ALT_MIN_LEGALE)
     try:
         hh = int(heure_str.split(":")[0])
-        infr_nuit = (hh >= HEURE_NUIT_DEB or hh < HEURE_NUIT_FIN)
+        infr_nuit = (hh >= config.HEURE_NUIT_DEB or hh < config.HEURE_NUIT_FIN)
     except Exception:
         infr_nuit = False
     if infr_alt and infr_nuit:
         return "ALT+NUIT", (f"DOUBLE INFRACTION : altitude {alt_m} m sous le minimum legal"
-            f" de {ALT_MIN_LEGALE} m ET vol a {heure_str} hors plage autorisee CDG (22h-6h)")
+            f" de {config.ALT_MIN_LEGALE} m ET vol a {heure_str} hors plage autorisee CDG"
+            f" ({config.HEURE_NUIT_DEB}h-{config.HEURE_NUIT_FIN}h)")
     if infr_alt:
-        return "ALT", f"Altitude {alt_m} m inferieure au minimum legal de {ALT_MIN_LEGALE} m (arrete 1957)"
+        return "ALT", (f"Altitude {alt_m} m inferieure au minimum legal"
+            f" de {config.ALT_MIN_LEGALE} m (arrete 1957)")
     if infr_nuit:
-        return "NUIT", f"Vol a {heure_str} : restriction nocturne CDG (22h-6h)"
+        return "NUIT", (f"Vol a {heure_str} : restriction nocturne CDG"
+            f" ({config.HEURE_NUIT_DEB}h-{config.HEURE_NUIT_FIN}h)")
     return None, ""

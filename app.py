@@ -18,7 +18,8 @@ from config import (APP_TITLE, DB_FILE, DEDUP_WINDOW, LAT, LON,
                     TAG_NORMAL_GROUND, TAG_INFR_ALT, TAG_INFR_NUIT, TAG_INFR_DOUBLE)
 from api import chercher_coordonnees_commune
 from database import clear_db, get_last_seen, init_db, load_all, save_passage
-from dialogs import DialogueProfil, MenuContextuel
+import config as _config
+from dialogs import DialogueProfil, DialogueReglages, MenuContextuel
 from filters import analyser_infraction, est_avion_de_ligne
 from utils import distance_km, fmt_alt, fmt_pays, fmt_val, get_code, get_tag
 
@@ -60,6 +61,15 @@ class RadarApp(tk.Tk):
             self._maj_coordonnees_profil()
         else:
             self._demander_profil(premier=True)
+        self._demander_reglages()
+
+    def _demander_reglages(self):
+        dlg = DialogueReglages(self)
+        self.wait_window(dlg)
+        if dlg.result:
+            _config.ALT_MIN_LEGALE  = dlg.result["alt_min"]
+            _config.HEURE_NUIT_DEB  = dlg.result["nuit_deb"]
+            _config.HEURE_NUIT_FIN  = dlg.result["nuit_fin"]
 
     def _maj_coordonnees_profil(self):
         if not self.profil:
