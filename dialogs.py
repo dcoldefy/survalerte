@@ -27,12 +27,13 @@ class DialogueDestinataire(tk.Toplevel):
         self.focus_force()
         self.result = None
         self.configure(bg="#F8F8F6")
+        self._build(profil)
         self.update_idletasks()
-        w, h = 500, 340
+        w = 500
+        h = self.winfo_reqheight()
         x = parent.winfo_x() + (parent.winfo_width()  - w) // 2
         y = parent.winfo_y() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
-        self._build(profil)
 
     def _build(self, profil):
         hdr = tk.Frame(self, bg="#A32D2D", pady=12, padx=20)

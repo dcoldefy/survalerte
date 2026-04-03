@@ -24,7 +24,7 @@ def generer_plainte_pdf(profil, vol, destinataire, commune_survol=None):
         from reportlab.lib.enums import TA_RIGHT, TA_JUSTIFY
     except ImportError:
         raise RuntimeError(
-            "Le module reportlab n'est pas installe.\n"
+            "Le module reportlab n'est pas installé.\n"
             "Ouvrez un terminal et tapez : pip install reportlab")
 
     prenom   = profil.get("prenom", "").upper()
@@ -45,7 +45,7 @@ def generer_plainte_pdf(profil, vol, destinataire, commune_survol=None):
     elif icao24:
         ref_vol = icao24.strip()
     else:
-        ref_vol = "reference inconnue"
+        ref_vol = "référence inconnue"
 
     horodatage  = datetime.now().strftime("%Y%m%d_%H%M%S")
     nom_fichier = f"Plainte_{horodatage}.pdf"
@@ -89,22 +89,22 @@ def generer_plainte_pdf(profil, vol, destinataire, commune_survol=None):
     # Objet
     heure_obj = heure_vol[:5] if len(heure_vol) >= 5 else heure_vol
     story.append(Paragraph(
-        f"Objet : Plainte pour nuisance aerienne - vol du {date_vol} a {heure_obj}", s_objet))
+        f"Objet : Plainte pour nuisance aérienne — vol du {date_vol} à {heure_obj}", s_objet))
 
     story.append(HRFlowable(width="100%", thickness=1.5, color=bleu))
     story.append(Spacer(1, 0.5*cm))
 
     # Corps
     lignes = [
-        f"Je soussigne {prenom} {nom}, demeurant au {adresse}, {cp}, {ville_pl},",
-        (f"declare avoir ete gene par un avion volant a basse altitude"
-         f" le {date_vol} a {heure_vol} au dessus de {commune_survol}."),
+        f"Je soussigné(e) {prenom} {nom}, demeurant au {adresse}, {cp}, {ville_pl},",
+        (f"déclare avoir été gêné(e) par un avion volant à basse altitude"
+         f" le {date_vol} à {heure_vol} au-dessus de {commune_survol}."),
         None,
-        "Je souhaite que ma plainte soit enregistree et qu'une reponse circonstanciee me soit adressee.",
+        "Je souhaite que ma plainte soit enregistrée et qu'une réponse circonstanciée me soit adressée.",
         None,
-        "Si une infraction etait constatee, je souhaite que des sanctions soient prises contre les responsables.",
+        "Si une infraction était constatée, je souhaite que des sanctions soient prises contre les responsables.",
         None,
-        f"Pour information, il semblerait que le vol concerne soit le vol : {ref_vol}",
+        f"Pour information, il semblerait que le vol concerné soit le vol : {ref_vol}",
     ]
     for ligne in lignes:
         if ligne:
@@ -114,7 +114,7 @@ def generer_plainte_pdf(profil, vol, destinataire, commune_survol=None):
 
     story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph(
-        "Veuillez agreer, Madame, Monsieur, l'expression de mes salutations distinguees.", s_body))
+        "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.", s_body))
     story.append(Spacer(1, 1.5*cm))
 
     # Signature
@@ -122,13 +122,6 @@ def generer_plainte_pdf(profil, vol, destinataire, commune_survol=None):
     story.append(Spacer(1, 1.8*cm))
     story.append(Paragraph("_______________________________", s_normal))
     story.append(Paragraph(f"{prenom} {nom}", s_normal))
-
-    # Pied de page
-    story.append(Spacer(1, 1*cm))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
-    story.append(Paragraph(
-        f"Document genere par Radar Survol Conflans-Sainte-Honorine {VERSION} - Source : OpenSky Network (ADS-B)",
-        s_small))
 
     doc.build(story)
     return chemin
