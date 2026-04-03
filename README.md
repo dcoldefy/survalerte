@@ -1,4 +1,4 @@
-# Radar de Survol Aérien
+# SurvAlerte — Radar de Survol Aérien
 
 Application Windows de surveillance des survols aériens au-dessus de votre commune. Détecte les infractions réglementaires (altitude, horaires nocturnes) et génère des plaintes en PDF.
 
@@ -14,21 +14,27 @@ Application Windows de surveillance des survols aériens au-dessus de votre comm
 
 ## Installation
 
+### Prérequis
+
+- [Python 3.8+](https://www.python.org/downloads/) — cochez "Add Python to PATH" lors de l'installation
+
+### Étapes
+
 ```bash
+git clone https://github.com/dcoldefy/survalerte.git
+cd survalerte
 pip install requests reportlab
-```
-
-## Lancement
-
-```bash
 python main.py
 ```
 
 Au premier lancement, l'application demande de renseigner votre profil (nom, adresse, code postal, commune). Ces informations servent à personnaliser les plaintes PDF et à identifier votre commune de survol.
 
-## Compiler en .exe
+## Compiler en .exe (Windows)
+
+Pour créer un exécutable autonome sans avoir besoin de Python :
 
 ```bash
+pip install pyinstaller
 build.bat
 ```
 
@@ -36,7 +42,7 @@ L'exécutable est généré dans `dist/RadarSurvolConflans.exe`.
 
 ## Zone surveillée
 
-La zone de surveillance est centrée sur les coordonnées configurées dans l'application, avec un rayon d'environ 28 km (±0.25°).
+La zone de surveillance est centrée sur votre commune (configurée au premier lancement), avec un rayon ajustable depuis l'interface.
 
 ## Données
 
