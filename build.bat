@@ -33,7 +33,7 @@ echo.
 
 echo [2/3] Generation du .exe en cours (1-2 minutes)...
 echo.
-python -m PyInstaller --onefile --windowed --name "RadarSurvolConflans" main.py
+python -m PyInstaller --onefile --windowed --name "SurvAlerte" main.py
 
 if errorlevel 1 (
     echo.
@@ -45,7 +45,7 @@ if errorlevel 1 (
 echo.
 echo ================================================
 echo   [OK] TERMINE !
-echo   Votre application : dist\RadarSurvolConflans.exe
+echo   Votre application : dist\SurvAlerte.exe
 echo   Double-cliquez dessus pour la lancer.
 echo ================================================
 echo.

@@ -44,7 +44,7 @@ Pas besoin de Python ni de ligne de commande :
 ```bash
 git clone https://github.com/dcoldefy/survalerte.git
 cd survalerte
-pip install requests reportlab
+pip install -r requirements.txt
 python main.py
 ```
 
@@ -59,7 +59,7 @@ pip install pyinstaller
 build.bat
 ```
 
-L'exécutable est généré dans `dist/RadarSurvolConflans.exe`.
+L'exécutable est généré dans `dist/SurvAlerte.exe`.
 
 ---
 
