@@ -12,13 +12,34 @@ Application Windows de surveillance des survols aériens au-dessus de votre comm
 - Export CSV de l'historique
 - Interface graphique Tkinter avec tableau coloré et filtres
 
-## Installation
+---
+
+## Téléchargement direct (recommandé pour les débutants)
+
+Pas besoin de Python ni de ligne de commande :
+
+1. Allez dans [**Releases**](https://github.com/dcoldefy/survalerte/releases/latest)
+2. Téléchargez **RadarSurvolConflans.exe**
+3. Double-cliquez sur le fichier pour lancer l'application
+
+> Si Windows affiche un avertissement "application inconnue", cliquez sur **"Informations complémentaires"** puis **"Exécuter quand même"**.
+
+---
+
+## Installation avec Python (utilisateurs avancés)
 
 ### Prérequis
 
-- [Python 3.8+](https://www.python.org/downloads/) — cochez "Add Python to PATH" lors de l'installation
+- [Python 3.8+](https://www.python.org/downloads/) — cochez **"Add Python to PATH"** lors de l'installation
 
 ### Étapes
+
+**1. Ouvrir une fenêtre de commande**
+
+- Appuyez sur les touches `Windows` + `R`
+- Tapez `cmd` puis appuyez sur `Entrée`
+
+**2. Copier-coller ces commandes une par une :**
 
 ```bash
 git clone https://github.com/dcoldefy/survalerte.git
@@ -29,9 +50,9 @@ python main.py
 
 Au premier lancement, l'application demande de renseigner votre profil (nom, adresse, code postal, commune). Ces informations servent à personnaliser les plaintes PDF et à identifier votre commune de survol.
 
-## Compiler en .exe (Windows)
+---
 
-Pour créer un exécutable autonome sans avoir besoin de Python :
+## Compiler le .exe soi-même
 
 ```bash
 pip install pyinstaller
@@ -40,9 +61,7 @@ build.bat
 
 L'exécutable est généré dans `dist/RadarSurvolConflans.exe`.
 
-## Zone surveillée
-
-La zone de surveillance est centrée sur votre commune (configurée au premier lancement), avec un rayon ajustable depuis l'interface.
+---
 
 ## Données
 
