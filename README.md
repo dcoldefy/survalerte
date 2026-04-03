@@ -1,6 +1,6 @@
 # SurvAlerte — Radar de Survol Aérien
 
-Application Windows de surveillance des survols aériens au-dessus de votre commune. Détecte les infractions réglementaires (altitude, horaires nocturnes) et génère des plaintes en PDF.
+Application Windows de surveillance des survols aériens au-dessus de votre commune. Détecte les infractions réglementaires (altitude, horaires nocturnes). Clic droit pour suivre le vol et/ou générer directement une lettre plainte en PDF.
 
 ## Fonctionnalités
 
