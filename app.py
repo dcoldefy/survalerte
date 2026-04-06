@@ -10,7 +10,36 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 
+import subprocess
+
 import requests
+
+
+def _envoyer_notification(title: str, message: str) -> None:
+    """Notification toast Windows native via PowerShell (sans dépendance externe)."""
+    title_esc   = title.replace("'", "''")
+    message_esc = message.replace("'", "''")
+    script = (
+        "[Windows.UI.Notifications.ToastNotificationManager,"
+        " Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null;"
+        "$t   = [Windows.UI.Notifications.ToastTemplateType]::ToastText02;"
+        "$xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($t);"
+        "$nd  = $xml.GetElementsByTagName('text');"
+        f"$nd[0].AppendChild($xml.CreateTextNode('{title_esc}'))   | Out-Null;"
+        f"$nd[1].AppendChild($xml.CreateTextNode('{message_esc}')) | Out-Null;"
+        "$toast = [Windows.UI.Notifications.ToastNotification]::new($xml);"
+        "$app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}"
+        "\\WindowsPowerShell\\v1.0\\powershell.exe';"
+        "[Windows.UI.Notifications.ToastNotificationManager]"
+        "::CreateToastNotifier($app).Show($toast);"
+    )
+    try:
+        subprocess.Popen(
+            ["powershell", "-WindowStyle", "Hidden", "-NonInteractive", "-Command", script],
+            creationflags=0x08000000,  # CREATE_NO_WINDOW
+        )
+    except Exception:
+        pass
 
 from config import (APP_TITLE, DB_FILE, DEDUP_WINDOW, LAT, LON,
                     SCAN_INTERVAL, VERSION,
@@ -33,7 +62,8 @@ class RadarApp(tk.Tk):
         self.minsize(950, 560)
         self.configure(bg="#F8F8F6")
         init_db()
-        self.recording     = False
+        self.recording       = False
+        self.recording_start = None
         self.stop_event    = threading.Event()
         self.next_scan_ts  = 0
         self.scan_count    = 0
@@ -43,6 +73,7 @@ class RadarApp(tk.Tk):
         self.seen_recently = get_last_seen()
         self.profil        = None
         self.rayon_km      = tk.IntVar(value=3)
+        self.notif_active  = True
         self.scan_lat      = LAT
         self.scan_lon      = LON
         self._build_ui()
@@ -73,6 +104,9 @@ class RadarApp(tk.Tk):
             _config.ALT_MIN_LEGALE  = dlg.result["alt_min"]
             _config.HEURE_NUIT_DEB  = dlg.result["nuit_deb"]
             _config.HEURE_NUIT_FIN  = dlg.result["nuit_fin"]
+            if hasattr(self, "_leg_alt_var"):
+                self._leg_alt_var.set(f"Altitude < {_config.ALT_MIN_LEGALE} m")
+                self._leg_nuit_var.set(f"Vol nocturne {_config.HEURE_NUIT_DEB}h-{_config.HEURE_NUIT_FIN}h")
 
     def _maj_coordonnees_profil(self):
         if not self.profil:
@@ -138,17 +172,13 @@ class RadarApp(tk.Tk):
         self.lbl_commune = tk.Label(top, text="OpenSky Network  |  ADS-B",
                  font=("Segoe UI", 9), bg="#FFFFFF", fg="#888")
         self.lbl_commune.pack(side="left", padx=12)
-        self.lbl_infr_count = tk.Label(top, text="0 infraction constatée",
-                                       font=("Segoe UI", 10, "bold"),
-                                       bg="#FFFFFF", fg="#2E7D32", padx=10, pady=4)
-        self.lbl_infr_count.pack(side="right")
 
         ubar = tk.Frame(self, bg="#E6F1FB", pady=6, padx=16)
         ubar.pack(fill="x")
         tk.Label(ubar, text="Utilisateur :", font=("Segoe UI", 8, "bold"),
                  bg="#E6F1FB", fg="#185FA5").pack(side="left")
         self.lbl_profil = tk.Label(ubar, text="(chargement...)",
-                                   font=("Segoe UI", 8), bg="#E6F1FB", fg="red")
+                                   font=("Segoe UI", 8), bg="#E6F1FB", fg="#185FA5")
         self.lbl_profil.pack(side="left", padx=(6, 0))
         tk.Button(ubar, text="Changer de profil",
                   command=lambda: self._demander_profil(premier=False),
@@ -159,38 +189,40 @@ class RadarApp(tk.Tk):
         sf = tk.Frame(self, bg="#F8F8F6", padx=16, pady=8)
         sf.pack(fill="x")
         self.stat_vars = {}
-        for key, label, color in [
-            ("sTotal",       "Passages enregistres", "#1a1a1a"),
-            ("sInfractions", "Infractions detectees", "#C0392B"),
-            ("sMin",         "Altitude min.",         "#1a1a1a"),
-            ("sAvg",         "Altitude moyenne",      "#1a1a1a"),
+        self.stat_labels = {}
+        for key, label, color, default_val, font_size in [
+            ("sDepuis",      "Enregistrements depuis :", "#1a1a1a", "-",  12),
+            ("sTotal",       "Passages enregistres",     "#1a1a1a", "0",  16),
+            ("sInfractions", "Infractions detectees",    "#2E7D32", "0",  16),
         ]:
             card = tk.Frame(sf, bg="#EFEFED", padx=14, pady=8)
             card.pack(side="left", expand=True, fill="x", padx=(0, 8))
             tk.Label(card, text=label, font=("Segoe UI", 8),
                      bg="#EFEFED", fg="#888").pack(anchor="w")
-            var = tk.StringVar(value="0" if "Infr" in label or "Pass" in label else "-")
+            var = tk.StringVar(value=default_val)
             self.stat_vars[key] = var
-            tk.Label(card, textvariable=var, font=("Segoe UI", 16, "bold"),
-                     bg="#EFEFED", fg=color).pack(anchor="w")
+            lbl = tk.Label(card, textvariable=var, font=("Segoe UI", font_size, "bold"),
+                           bg="#EFEFED", fg=color)
+            lbl.pack(anchor="w")
+            self.stat_labels[key] = lbl
 
         leg = tk.Frame(self, bg="#F8F8F6", padx=16, pady=3)
         leg.pack(fill="x")
-        tk.Label(leg, text="Legende : ", font=("Segoe UI", 8, "bold"),
+        tk.Label(leg, text="Legende infractions : ", font=("Segoe UI", 8, "bold"),
                  bg="#F8F8F6", fg="#555").pack(side="left")
-        for bg, fg, txt in [
-            ("#FFCCCC", "#7B0000", "Altitude < 1000 m"),
-            ("#FFB3C1", "#7B0000", "Vol nocturne 22h-6h"),
+        self._leg_alt_var  = tk.StringVar(value=f"Altitude < {_config.ALT_MIN_LEGALE} m")
+        self._leg_nuit_var = tk.StringVar(value=f"Vol nocturne {_config.HEURE_NUIT_DEB}h-{_config.HEURE_NUIT_FIN}h")
+        for bg, fg, var_or_txt in [
+            ("#FFCCCC", "#7B0000", self._leg_alt_var),
+            ("#FFB3C1", "#7B0000", self._leg_nuit_var),
             ("#FF6B6B", "#FFFFFF", "Double infraction"),
-            ("#FFF0F0", "#333",    "Normal basse"),
-            ("#FFFBF0", "#333",    "Normal moyenne"),
-            ("#F0F4FF", "#333",    "Normal haute"),
         ]:
             fr = tk.Frame(leg, bg=bg, padx=6, pady=2)
             fr.pack(side="left", padx=(5, 0))
-            tk.Label(fr, text=txt, font=("Segoe UI", 7), bg=bg, fg=fg).pack()
-        tk.Label(leg, text="  Clic droit sur un vol pour suivre ou deposer plainte",
-                 font=("Segoe UI", 7, "italic"), bg="#F8F8F6", fg="#aaa").pack(side="right")
+            if isinstance(var_or_txt, tk.StringVar):
+                tk.Label(fr, textvariable=var_or_txt, font=("Segoe UI", 7), bg=bg, fg=fg).pack()
+            else:
+                tk.Label(fr, text=var_or_txt, font=("Segoe UI", 7), bg=bg, fg=fg).pack()
 
         af = tk.Frame(self, bg="#F8F8F6", padx=16, pady=4)
         af.pack(fill="x")
@@ -208,6 +240,14 @@ class RadarApp(tk.Tk):
                       bg="#E8E8E6", fg="#333", activebackground="#D8D8D6",
                       relief="flat", padx=12, pady=6,
                       cursor="hand2").pack(side="left", padx=(8, 0))
+        self.btn_notif = tk.Button(af, text="Notifications : ON",
+                                   command=self._toggle_notif,
+                                   font=("Segoe UI", 9),
+                                   bg="#1D9E75", fg="white",
+                                   activebackground="#0F6E56",
+                                   relief="flat", padx=12, pady=6,
+                                   cursor="hand2")
+        self.btn_notif.pack(side="left", padx=(8, 0))
         self.lbl_timer = tk.Label(af, text="", font=("Segoe UI", 9, "italic"),
                                    bg="#F8F8F6", fg="#999")
         self.lbl_timer.pack(side="left", padx=16)
@@ -237,6 +277,8 @@ class RadarApp(tk.Tk):
         self.filt_infr.current(0)
         self.filt_infr.pack(side="left")
         self.filt_infr.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
+        tk.Label(ff, text="   Clic droit sur un vol pour suivre ou deposer plainte",
+                 font=("Segoe UI", 9), bg="#F8F8F6", fg="#1a1a1a").pack(side="left")
 
         tf = tk.Frame(self, bg="#F8F8F6", padx=16, pady=4)
         tf.pack(fill="both", expand=True)
@@ -343,6 +385,8 @@ class RadarApp(tk.Tk):
     def _toggle_rec(self):
         if not self.recording:
             self.recording = True
+            self.recording_start = datetime.now()
+            self.stat_vars["sDepuis"].set(self.recording_start.strftime("%d/%m/%Y %H:%M"))
             self.stop_event.clear()
             self.btn_rec.config(text="Arreter l'enregistrement",
                                 bg="#E24B4A", activebackground="#A32D2D")
@@ -418,6 +462,11 @@ class RadarApp(tk.Tk):
 
             cutoff = now_ts - DEDUP_WINDOW
             self.seen_recently = {k: v for k, v in self.seen_recently.items() if v >= cutoff}
+            if n_infr and self.notif_active:
+                msg = (f"{n_infr} infraction{'s' if n_infr > 1 else ''} "
+                       f"détectée{'s' if n_infr > 1 else ''} dans la zone surveillée.")
+                _envoyer_notification("SurvAlerte — Infraction détectée", msg)
+
             infr_txt = f", {n_infr} infraction(s)" if n_infr else ""
             self._set_status(
                 f"Scan #{self.scan_count} : {len(states)} detecte(s), "
@@ -506,19 +555,7 @@ class RadarApp(tk.Tk):
         self.stat_vars["sTotal"].set(str(len(rows)))
         n_infr = sum(1 for r in rows if r[13])
         self.stat_vars["sInfractions"].set(str(n_infr))
-        alts = [r[5] for r in rows if r[5] is not None]
-        if alts:
-            self.stat_vars["sMin"].set(fmt_alt(min(alts)))
-            self.stat_vars["sAvg"].set(fmt_alt(int(sum(alts) / len(alts))))
-        else:
-            self.stat_vars["sMin"].set("-")
-            self.stat_vars["sAvg"].set("-")
-        if n_infr:
-            self.lbl_infr_count.config(
-                text=f"{n_infr} infraction{'s' if n_infr > 1 else ''} détectée{'s' if n_infr > 1 else ''}",
-                fg="#C62828")
-        else:
-            self.lbl_infr_count.config(text="0 infraction constatée", fg="#2E7D32")
+        self.stat_labels["sInfractions"].config(fg="#C0392B" if n_infr else "#2E7D32")
 
     def _show_infractions(self):
         self.filt_infr.set("Infractions uniquement")
@@ -553,6 +590,15 @@ class RadarApp(tk.Tk):
                              "oui" if au_sol else "non",
                              pays, lat, lon, infraction or ""])
         messagebox.showinfo("Export reussi", f"Fichier exporte :\n{path}")
+
+    def _toggle_notif(self):
+        self.notif_active = not self.notif_active
+        if self.notif_active:
+            self.btn_notif.config(text="Notifications : ON",
+                                  bg="#1D9E75", activebackground="#0F6E56")
+        else:
+            self.btn_notif.config(text="Notifications : OFF",
+                                  bg="#999999", activebackground="#777777")
 
     def _clear(self):
         if not messagebox.askyesno("Effacer", "Supprimer tous les passages ?"):

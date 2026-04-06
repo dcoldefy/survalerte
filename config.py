@@ -5,7 +5,7 @@ Configuration globale — constantes, coordonnées, destinataires.
 import os
 
 APP_TITLE      = "Radar de Survol Aerien"
-VERSION        = "v1.9"
+VERSION        = "v2.0"
 LAT            = 48.9897
 LON            = 2.0939
 DELTA          = 0.027
