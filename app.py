@@ -38,6 +38,8 @@ class RadarApp(tk.Tk):
         self.next_scan_ts  = 0
         self.scan_count    = 0
         self.rows_cache    = []
+        self.sort_col      = None
+        self.sort_rev      = False
         self.seen_recently = get_last_seen()
         self.profil        = None
         self.rayon_km      = tk.IntVar(value=3)
@@ -136,10 +138,10 @@ class RadarApp(tk.Tk):
         self.lbl_commune = tk.Label(top, text="OpenSky Network  |  ADS-B",
                  font=("Segoe UI", 9), bg="#FFFFFF", fg="#888")
         self.lbl_commune.pack(side="left", padx=12)
-        self.lbl_status = tk.Label(top, text="En attente",
-                                   font=("Segoe UI", 9, "bold"),
-                                   bg="#FFF8E1", fg="#BA7517", padx=10, pady=4)
-        self.lbl_status.pack(side="right")
+        self.lbl_infr_count = tk.Label(top, text="0 infraction constatée",
+                                       font=("Segoe UI", 10, "bold"),
+                                       bg="#FFFFFF", fg="#2E7D32", padx=10, pady=4)
+        self.lbl_infr_count.pack(side="right")
 
         ubar = tk.Frame(self, bg="#E6F1FB", pady=6, padx=16)
         ubar.pack(fill="x")
@@ -222,23 +224,11 @@ class RadarApp(tk.Tk):
             tk.Label(ff, text=t, font=("Segoe UI", 9),
                      bg="#F8F8F6", fg="#666").pack(side="left", padx=(0, 4))
 
-        lbl("Altitude :")
-        self.filt_alt = ttk.Combobox(ff, width=14, state="readonly",
-            values=["Toutes", "< 1 000 m", "1 000 - 5 000 m", "> 5 000 m"])
-        self.filt_alt.current(0)
-        self.filt_alt.pack(side="left")
-        self.filt_alt.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
-
-        lbl("  Jour :")
+        lbl("Jour :")
         self.filt_day = ttk.Combobox(ff, width=12, state="readonly", values=["Tous"])
         self.filt_day.current(0)
         self.filt_day.pack(side="left")
         self.filt_day.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
-
-        lbl("  Indicatif :")
-        self.filt_call = tk.Entry(ff, width=10, font=("Segoe UI", 9))
-        self.filt_call.pack(side="left")
-        self.filt_call.bind("<KeyRelease>", lambda e: self._apply_filters())
 
         lbl("  Infractions :")
         self.filt_infr = ttk.Combobox(ff, width=20, state="readonly",
@@ -248,21 +238,13 @@ class RadarApp(tk.Tk):
         self.filt_infr.pack(side="left")
         self.filt_infr.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
 
-        lbl("  Trier :")
-        self.filt_sort = ttk.Combobox(ff, width=18, state="readonly",
-            values=["Altitude croissante", "Altitude decroissante",
-                    "Heure (recent)", "Heure (ancien)"])
-        self.filt_sort.current(0)
-        self.filt_sort.pack(side="left")
-        self.filt_sort.bind("<<ComboboxSelected>>", lambda e: self._apply_filters())
-
         tf = tk.Frame(self, bg="#F8F8F6", padx=16, pady=4)
         tf.pack(fill="both", expand=True)
-        cols = ("Date", "Heure", "Indicatif", "ICAO24", "Altitude (m)",
-                "Vitesse (km/h)", "Cap", "Au sol", "Pays", "Distance (km)", "Statut reglementaire")
-        self.tree = ttk.Treeview(tf, columns=cols, show="headings", selectmode="browse")
-        for col, w in zip(cols, (88, 78, 95, 88, 105, 105, 60, 60, 155, 90, 195)):
-            self.tree.heading(col, text=col)
+        self._cols = ("Date", "Heure", "Indicatif", "ICAO24", "Altitude (m)",
+                      "Vitesse (km/h)", "Cap", "Au sol", "Pays", "Distance (km)", "Statut reglementaire")
+        self.tree = ttk.Treeview(tf, columns=self._cols, show="headings", selectmode="browse")
+        for col, w in zip(self._cols, (88, 78, 95, 88, 105, 105, 60, 60, 155, 90, 195)):
+            self.tree.heading(col, text=col, command=lambda c=col: self._sort_by(c))
             self.tree.column(col, width=w, minwidth=40)
         style = ttk.Style()
         style.theme_use("clam")
@@ -299,6 +281,17 @@ class RadarApp(tk.Tk):
                  font=("Segoe UI", 8), bg="#EFEFED", fg="#bbb").pack(side="right")
 
     # ---- Interactions tableau ------------------------------------------------
+
+    def _sort_by(self, col):
+        if self.sort_col == col:
+            self.sort_rev = not self.sort_rev
+        else:
+            self.sort_col = col
+            self.sort_rev = False
+        for c in self._cols:
+            arrow = (" ▲" if not self.sort_rev else " ▼") if c == self.sort_col else ""
+            self.tree.heading(c, text=c + arrow)
+        self._apply_filters()
 
     def _on_right_click(self, event):
         item = self.tree.identify_row(event.y)
@@ -451,23 +444,11 @@ class RadarApp(tk.Tk):
 
     def _apply_filters(self):
         rows = list(self.rows_cache)
-        alt_f  = self.filt_alt.get()
         day_f  = self.filt_day.get()
-        call_f = self.filt_call.get().strip().upper()
         infr_f = self.filt_infr.get()
-        sort_f = self.filt_sort.get()
 
-        if alt_f == "< 1 000 m":
-            rows = [r for r in rows if r[5] is not None and r[5] < 1000]
-        elif alt_f == "1 000 - 5 000 m":
-            rows = [r for r in rows if r[5] is not None and 1000 <= r[5] <= 5000]
-        elif alt_f == "> 5 000 m":
-            rows = [r for r in rows if r[5] is not None and r[5] > 5000]
         if day_f != "Tous":
             rows = [r for r in rows if r[0] == day_f]
-        if call_f:
-            rows = [r for r in rows if call_f in (r[4] or "").upper()
-                    or call_f in (r[3] or "").upper()]
         if infr_f == "Infractions uniquement":
             rows = [r for r in rows if r[13]]
         elif infr_f == "Altitude < 1000 m":
@@ -477,14 +458,23 @@ class RadarApp(tk.Tk):
         elif infr_f == "Double infraction":
             rows = [r for r in rows if r[13] and "DOUBLE" in r[13]]
 
-        if sort_f == "Altitude croissante":
-            rows.sort(key=lambda r: r[5] if r[5] is not None else 99999)
-        elif sort_f == "Altitude decroissante":
-            rows.sort(key=lambda r: r[5] if r[5] is not None else -1, reverse=True)
-        elif sort_f == "Heure (recent)":
-            rows.sort(key=lambda r: r[2], reverse=True)
-        elif sort_f == "Heure (ancien)":
-            rows.sort(key=lambda r: r[2])
+        if self.sort_col:
+            none_hi = -1 if self.sort_rev else 99999
+            col_key = {
+                "Date":                 lambda r: r[2],
+                "Heure":                lambda r: r[2],
+                "Indicatif":            lambda r: r[4] or "",
+                "ICAO24":               lambda r: r[3] or "",
+                "Altitude (m)":         lambda r: r[5] if r[5] is not None else none_hi,
+                "Vitesse (km/h)":       lambda r: r[7] if r[7] is not None else none_hi,
+                "Cap":                  lambda r: r[8] if r[8] is not None else none_hi,
+                "Au sol":               lambda r: r[9],
+                "Pays":                 lambda r: r[10] or "",
+                "Distance (km)":        lambda r: distance_km(self.scan_lat, self.scan_lon, r[11], r[12]) or none_hi,
+                "Statut reglementaire": lambda r: r[13] or "",
+            }.get(self.sort_col)
+            if col_key:
+                rows.sort(key=col_key, reverse=self.sort_rev)
 
         self._populate_tree(rows)
 
@@ -514,7 +504,8 @@ class RadarApp(tk.Tk):
     def _update_stats(self):
         rows = self.rows_cache
         self.stat_vars["sTotal"].set(str(len(rows)))
-        self.stat_vars["sInfractions"].set(str(sum(1 for r in rows if r[13])))
+        n_infr = sum(1 for r in rows if r[13])
+        self.stat_vars["sInfractions"].set(str(n_infr))
         alts = [r[5] for r in rows if r[5] is not None]
         if alts:
             self.stat_vars["sMin"].set(fmt_alt(min(alts)))
@@ -522,6 +513,12 @@ class RadarApp(tk.Tk):
         else:
             self.stat_vars["sMin"].set("-")
             self.stat_vars["sAvg"].set("-")
+        if n_infr:
+            self.lbl_infr_count.config(
+                text=f"{n_infr} infraction{'s' if n_infr > 1 else ''} détectée{'s' if n_infr > 1 else ''}",
+                fg="#C62828")
+        else:
+            self.lbl_infr_count.config(text="0 infraction constatée", fg="#2E7D32")
 
     def _show_infractions(self):
         self.filt_infr.set("Infractions uniquement")
@@ -573,4 +570,4 @@ class RadarApp(tk.Tk):
         self.after(1000, self._tick)
 
     def _set_status(self, txt, bg, fg):
-        self.lbl_status.config(text=txt, bg=bg, fg=fg)
+        pass
