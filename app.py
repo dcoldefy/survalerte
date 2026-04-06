@@ -206,23 +206,39 @@ class RadarApp(tk.Tk):
             lbl.pack(anchor="w")
             self.stat_labels[key] = lbl
 
-        leg = tk.Frame(self, bg="#F8F8F6", padx=16, pady=3)
-        leg.pack(fill="x")
-        tk.Label(leg, text="Legende infractions : ", font=("Segoe UI", 8, "bold"),
+        leg_wrap = tk.Frame(self, bg="#F8F8F6", padx=16, pady=3)
+        leg_wrap.pack(fill="x")
+        leg = tk.Frame(leg_wrap, bg="#F8F8F6")
+        leg.pack(anchor="w")
+        tk.Label(leg, text="Infractions : ", font=("Segoe UI", 10, "bold"),
                  bg="#F8F8F6", fg="#555").pack(side="left")
         self._leg_alt_var  = tk.StringVar(value=f"Altitude < {_config.ALT_MIN_LEGALE} m")
         self._leg_nuit_var = tk.StringVar(value=f"Vol nocturne {_config.HEURE_NUIT_DEB}h-{_config.HEURE_NUIT_FIN}h")
-        for bg, fg, var_or_txt in [
-            ("#FFCCCC", "#7B0000", self._leg_alt_var),
-            ("#FFB3C1", "#7B0000", self._leg_nuit_var),
-            ("#FF6B6B", "#FFFFFF", "Double infraction"),
+        for bg, fg, var_or_txt, clickable in [
+            ("#FFCCCC", "#7B0000", self._leg_alt_var,  True),
+            ("#FFB3C1", "#7B0000", self._leg_nuit_var, True),
+            ("#FF6B6B", "#FFFFFF", "Double infraction", False),
         ]:
-            fr = tk.Frame(leg, bg=bg, padx=6, pady=2)
+            fr = tk.Frame(leg, bg=bg, padx=6, pady=4,
+                          cursor="hand2" if clickable else "")
             fr.pack(side="left", padx=(5, 0))
             if isinstance(var_or_txt, tk.StringVar):
-                tk.Label(fr, textvariable=var_or_txt, font=("Segoe UI", 7), bg=bg, fg=fg).pack()
+                lbl = tk.Label(fr, textvariable=var_or_txt,
+                               font=("Segoe UI", 10, "bold"),
+                               bg=bg, fg=fg, cursor="hand2" if clickable else "")
+                lbl.pack()
             else:
-                tk.Label(fr, text=var_or_txt, font=("Segoe UI", 7), bg=bg, fg=fg).pack()
+                lbl = tk.Label(fr, text=var_or_txt, font=("Segoe UI", 10, "bold"), bg=bg, fg=fg)
+                lbl.pack()
+            if clickable:
+                sub = tk.Label(fr, text="cliquer pour modifier", font=("Segoe UI", 7),
+                               bg=bg, fg=fg, cursor="hand2")
+                sub.pack()
+                fr.bind("<Button-1>",  lambda e: self._demander_reglages())
+                lbl.bind("<Button-1>", lambda e: self._demander_reglages())
+                sub.bind("<Button-1>", lambda e: self._demander_reglages())
+            else:
+                tk.Label(fr, text=" ", font=("Segoe UI", 7), bg=bg, fg=fg).pack()
 
         af = tk.Frame(self, bg="#F8F8F6", padx=16, pady=4)
         af.pack(fill="x")
@@ -251,10 +267,10 @@ class RadarApp(tk.Tk):
         self.lbl_timer = tk.Label(af, text="", font=("Segoe UI", 9, "italic"),
                                    bg="#F8F8F6", fg="#999")
         self.lbl_timer.pack(side="left", padx=16)
-        tk.Label(af, text="Rayon (km) :", font=("Segoe UI", 9),
+        tk.Label(af, text="Rayon (km) :", font=("Segoe UI", 10, "bold"),
                  bg="#F8F8F6", fg="#666").pack(side="left", padx=(8, 2))
         tk.Spinbox(af, from_=1, to=50, increment=1, width=4,
-                   font=("Segoe UI", 9), textvariable=self.rayon_km,
+                   font=("Segoe UI", 10, "bold"), textvariable=self.rayon_km,
                    relief="flat", bg="#E8E8E6").pack(side="left")
 
         ff = tk.Frame(self, bg="#F8F8F6", padx=16, pady=4)
