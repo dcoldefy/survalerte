@@ -74,7 +74,7 @@ def est_transport_commercial(type_code):
 # Les immatriculations de jets privés (F-ABCD, N123AB, D-ABCD…) ne correspondent
 # jamais à ce format car elles contiennent un tiret ou ne commencent pas par
 # exactement 3 lettres suivies de chiffres.
-_CALLSIGN_RE = re.compile(r'^[A-Z]{3}[0-9]{1,4}[A-Z]?$')
+_CALLSIGN_RE = re.compile(r'^[A-Z]{3}[0-9]{1,4}[A-Z]{0,2}$')
 
 # Catégories ADS-B à exclure explicitement :
 #   A1 = aéronef léger, A2 = petit aéronef, A7 = hélicoptère
