@@ -46,7 +46,7 @@ from config import (APP_TITLE, DB_FILE, DEDUP_WINDOW, LAT, LON,
                     TAG_NORMAL_LOW, TAG_NORMAL_MID, TAG_NORMAL_HIGH,
                     TAG_NORMAL_GROUND, TAG_INFR_ALT, TAG_INFR_NUIT, TAG_INFR_DOUBLE)
 from api import chercher_coordonnees_commune, chercher_type_aeronef
-from database import clear_db, get_last_seen, init_db, load_all, save_passage
+from database import clear_db, get_active_flights, init_db, load_all, save_passage, update_passage
 import config as _config
 from dialogs import DialogueProfil, DialogueReglages, MenuContextuel
 from filters import analyser_infraction, est_avion_de_ligne, est_transport_commercial
@@ -70,7 +70,7 @@ class RadarApp(tk.Tk):
         self.rows_cache    = []
         self.sort_col      = None
         self.sort_rev      = False
-        self.seen_recently       = get_last_seen()
+        self.active_flights      = get_active_flights()  # icao24 -> {id, has_infraction, last_seen}
         self.aircraft_type_cache = {}   # icao24 -> type OACI (cache session hexdb.io)
         self.profil        = None
         self.rayon_km      = tk.IntVar(value=3)
@@ -137,7 +137,7 @@ class RadarApp(tk.Tk):
             icon="question")
         if reponse:
             clear_db()
-            self.seen_recently = {}
+            self.active_flights = {}
             self._refresh_table([])
             self._update_stats()
 
@@ -207,6 +207,10 @@ class RadarApp(tk.Tk):
                            bg="#EFEFED", fg=color)
             lbl.pack(anchor="w")
             self.stat_labels[key] = lbl
+            if key == "sTotal":
+                self.stat_vars["sTotalDetail"] = tk.StringVar(value="")
+                tk.Label(card, textvariable=self.stat_vars["sTotalDetail"],
+                         font=("Segoe UI", 7), bg="#EFEFED", fg="#999").pack(anchor="w")
 
         leg_wrap = tk.Frame(self, bg="#F8F8F6", padx=16, pady=3)
         leg_wrap.pack(fill="x")
@@ -449,14 +453,11 @@ class RadarApp(tk.Tk):
                       if s[5] is not None and s[6] is not None]
             now = datetime.now(); now_ts = int(now.timestamp())
             date_s = now.strftime("%d/%m/%Y"); time_s = now.strftime("%H:%M:%S")
-            added = 0; skipped = 0; filtres = 0; n_infr = 0
+            added = 0; updated = 0; frozen = 0; filtres = 0; n_infr = 0
 
             for s in states:
                 icao = (s[0] or "").strip()
                 if not icao:
-                    continue
-                if now_ts - self.seen_recently.get(icao, 0) < DEDUP_WINDOW:
-                    skipped += 1
                     continue
 
                 alt_m     = int(s[7])      if s[7] is not None else None
@@ -466,6 +467,7 @@ class RadarApp(tk.Tk):
                 au_sol    = 1 if s[8] else 0
 
                 if au_sol or not est_avion_de_ligne(indicatif, vitesse, categorie):
+                    print(f"[FILTRE] {indicatif} ({icao}) — couche 1 : au_sol={au_sol}, vitesse={vitesse}, cat={categorie}")
                     filtres += 1
                     continue
 
@@ -475,12 +477,11 @@ class RadarApp(tk.Tk):
                         self.aircraft_type_cache[icao] = chercher_type_aeronef(icao)
                     type_code = self.aircraft_type_cache[icao]
                     if type_code is not None and not est_transport_commercial(type_code):
+                        print(f"[FILTRE] {indicatif} ({icao}) — couche 2 hexdb : type={type_code}")
                         filtres += 1
                         continue
 
                 code_infr, msg_infr = analyser_infraction(alt_m, time_s, au_sol)
-                if code_infr:
-                    n_infr += 1
 
                 row = {"date": date_s, "heure": time_s, "timestamp": now_ts,
                        "icao24": icao, "indicatif": indicatif,
@@ -490,23 +491,44 @@ class RadarApp(tk.Tk):
                        "cap_deg": int(s[10]) if s[10] is not None else None,
                        "au_sol": au_sol, "pays": s[2] or "-",
                        "lat": s[6], "lon": s[5], "infraction": msg_infr}
-                save_passage(row)
-                self.seen_recently[icao] = now_ts
-                added += 1
+
+                if icao in self.active_flights:
+                    flight = self.active_flights[icao]
+                    flight["last_seen"] = now_ts
+                    if flight["has_infraction"]:
+                        # Infraction déjà constatée → figer les données
+                        frozen += 1
+                    else:
+                        # Mise à jour des données dynamiques
+                        update_passage(flight["id"], row)
+                        flight["has_infraction"] = bool(code_infr)
+                        if code_infr:
+                            n_infr += 1
+                        updated += 1
+                else:
+                    # Nouveau vol
+                    if code_infr:
+                        n_infr += 1
+                    db_id = save_passage(row)
+                    self.active_flights[icao] = {
+                        "id": db_id,
+                        "has_infraction": bool(code_infr),
+                        "last_seen": now_ts,
+                    }
+                    added += 1
 
             cutoff = now_ts - DEDUP_WINDOW
-            self.seen_recently = {k: v for k, v in self.seen_recently.items() if v >= cutoff}
+            self.active_flights = {k: v for k, v in self.active_flights.items()
+                                   if v["last_seen"] >= cutoff}
             if n_infr and self.notif_active:
                 msg = (f"{n_infr} infraction{'s' if n_infr > 1 else ''} "
                        f"détectée{'s' if n_infr > 1 else ''} dans la zone surveillée.")
                 _envoyer_notification("SurvAlerte — Infraction détectée", msg)
 
-            infr_txt = f", {n_infr} infraction(s)" if n_infr else ""
-            self._set_status(
-                f"Scan #{self.scan_count} : {len(states)} detecte(s), "
-                f"{added} avion(s) de ligne{infr_txt}, "
-                f"{filtres} petit(s) avion(s) ignore(s), {skipped} doublon(s)",
-                "#E8F8F0", "#0F6E56")
+            infr_txt = f" · {n_infr} infraction(s)" if n_infr else ""
+            detail = (f"Scan #{self.scan_count} · {added} nouveau(x) · "
+                      f"{updated} mis à jour · {frozen} figé(s){infr_txt}")
+            self.after(0, lambda d=detail: self.stat_vars["sTotalDetail"].set(d))
             self.after(0, lambda: self._refresh_table(load_all()))
             self.after(0, self._update_stats)
         except Exception as e:
@@ -643,7 +665,7 @@ class RadarApp(tk.Tk):
         if not messagebox.askyesno("Effacer", "Supprimer tous les passages ?"):
             return
         clear_db()
-        self.seen_recently.clear()
+        self.active_flights.clear()
         self.rows_cache = []
         self._apply_filters()
         self._update_stats()

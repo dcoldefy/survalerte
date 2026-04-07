@@ -63,6 +63,7 @@ def save_profil(nom, prenom, adresse, code_postal, ville):
 
 
 def save_passage(row):
+    """Insère un nouveau survol et retourne son id (int)."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""INSERT INTO survols
@@ -72,16 +73,42 @@ def save_passage(row):
         (row["date"], row["heure"], row["timestamp"], row["icao24"], row["indicatif"],
          row["altitude_m"], row["altitude_geo"], row["vitesse_kmh"], row["cap_deg"],
          row["au_sol"], row["pays"], row["lat"], row["lon"], row["infraction"]))
+    row_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def update_passage(db_id, row):
+    """Met à jour les données dynamiques d'un survol existant (date/heure de première détection conservées)."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""UPDATE survols SET
+        altitude_m=?, altitude_geo=?, vitesse_kmh=?, cap_deg=?,
+        lat=?, lon=?, infraction=?, timestamp=?
+        WHERE id=?""",
+        (row["altitude_m"], row["altitude_geo"], row["vitesse_kmh"], row["cap_deg"],
+         row["lat"], row["lon"], row["infraction"], row["timestamp"], db_id))
     conn.commit()
     conn.close()
 
 
-def get_last_seen():
+def get_active_flights():
+    """Retourne les vols actifs (vus dans la fenêtre DEDUP_WINDOW) sous la forme
+    {icao24: {"id": int, "has_infraction": bool, "last_seen": int}}."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     cutoff = int(time.time()) - DEDUP_WINDOW
-    c.execute("SELECT icao24, MAX(timestamp) FROM survols WHERE timestamp>=? GROUP BY icao24", (cutoff,))
-    result = {r[0]: r[1] for r in c.fetchall()}
+    c.execute("""SELECT icao24, id, infraction, MAX(timestamp) as last_seen
+                 FROM survols WHERE timestamp>=?
+                 GROUP BY icao24""", (cutoff,))
+    result = {}
+    for icao24, db_id, infraction, last_seen in c.fetchall():
+        result[icao24] = {
+            "id": db_id,
+            "has_infraction": bool(infraction),
+            "last_seen": last_seen,
+        }
     conn.close()
     return result
 
