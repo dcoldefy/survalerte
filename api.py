@@ -8,6 +8,20 @@ import requests
 from config import GEO_API, GEO_API_CENTRE, LAT, LON
 
 
+def chercher_type_aeronef(icao24):
+    """Retourne le code type OACI de l'aéronef via hexdb.io, ou None si inconnu."""
+    try:
+        r = requests.get(
+            f"https://hexdb.io/api/v1/aircraft/{icao24.lower()}",
+            timeout=3,
+        )
+        if r.status_code == 200:
+            return (r.json().get("Type") or "").strip().upper() or None
+    except Exception:
+        pass
+    return None
+
+
 def chercher_communes(code_postal):
     """Retourne la liste des noms de communes pour un code postal."""
     try:

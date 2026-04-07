@@ -45,11 +45,11 @@ from config import (APP_TITLE, DB_FILE, DEDUP_WINDOW, LAT, LON,
                     SCAN_INTERVAL, VERSION,
                     TAG_NORMAL_LOW, TAG_NORMAL_MID, TAG_NORMAL_HIGH,
                     TAG_NORMAL_GROUND, TAG_INFR_ALT, TAG_INFR_NUIT, TAG_INFR_DOUBLE)
-from api import chercher_coordonnees_commune
+from api import chercher_coordonnees_commune, chercher_type_aeronef
 from database import clear_db, get_last_seen, init_db, load_all, save_passage
 import config as _config
 from dialogs import DialogueProfil, DialogueReglages, MenuContextuel
-from filters import analyser_infraction, est_avion_de_ligne
+from filters import analyser_infraction, est_avion_de_ligne, est_transport_commercial
 from utils import distance_km, fmt_alt, fmt_pays, fmt_val, get_code, get_tag
 
 
@@ -70,10 +70,12 @@ class RadarApp(tk.Tk):
         self.rows_cache    = []
         self.sort_col      = None
         self.sort_rev      = False
-        self.seen_recently = get_last_seen()
+        self.seen_recently       = get_last_seen()
+        self.aircraft_type_cache = {}   # icao24 -> type OACI (cache session hexdb.io)
         self.profil        = None
         self.rayon_km      = tk.IntVar(value=3)
-        self.notif_active  = True
+        self.notif_active        = True
+        self.filtre_ligne_actif  = True
         self.scan_lat      = LAT
         self.scan_lon      = LON
         self._build_ui()
@@ -250,7 +252,6 @@ class RadarApp(tk.Tk):
                                   relief="flat", padx=16, pady=6, cursor="hand2")
         self.btn_rec.pack(side="left")
         for txt, cmd in [("Exporter CSV", self._export_csv),
-                          ("Infractions seulement", self._show_infractions),
                           ("Effacer journal", self._clear)]:
             tk.Button(af, text=txt, command=cmd, font=("Segoe UI", 9),
                       bg="#E8E8E6", fg="#333", activebackground="#D8D8D6",
@@ -264,6 +265,14 @@ class RadarApp(tk.Tk):
                                    relief="flat", padx=12, pady=6,
                                    cursor="hand2")
         self.btn_notif.pack(side="left", padx=(8, 0))
+        self.btn_filtre_ligne = tk.Button(af, text="Filtre ligne : ON",
+                                          command=self._toggle_filtre_ligne,
+                                          font=("Segoe UI", 9),
+                                          bg="#1D9E75", fg="white",
+                                          activebackground="#0F6E56",
+                                          relief="flat", padx=12, pady=6,
+                                          cursor="hand2")
+        self.btn_filtre_ligne.pack(side="left", padx=(8, 0))
         self.lbl_timer = tk.Label(af, text="", font=("Segoe UI", 9, "italic"),
                                    bg="#F8F8F6", fg="#999")
         self.lbl_timer.pack(side="left", padx=16)
@@ -460,6 +469,15 @@ class RadarApp(tk.Tk):
                     filtres += 1
                     continue
 
+                # Vérification du type réel via hexdb.io (cache session)
+                if self.filtre_ligne_actif:
+                    if icao not in self.aircraft_type_cache:
+                        self.aircraft_type_cache[icao] = chercher_type_aeronef(icao)
+                    type_code = self.aircraft_type_cache[icao]
+                    if type_code is not None and not est_transport_commercial(type_code):
+                        filtres += 1
+                        continue
+
                 code_infr, msg_infr = analyser_infraction(alt_m, time_s, au_sol)
                 if code_infr:
                     n_infr += 1
@@ -573,10 +591,6 @@ class RadarApp(tk.Tk):
         self.stat_vars["sInfractions"].set(str(n_infr))
         self.stat_labels["sInfractions"].config(fg="#C0392B" if n_infr else "#2E7D32")
 
-    def _show_infractions(self):
-        self.filt_infr.set("Infractions uniquement")
-        self._apply_filters()
-
     def _export_csv(self):
         if not self.rows_cache:
             messagebox.showinfo("Export", "Aucune donnee a exporter.")
@@ -615,6 +629,15 @@ class RadarApp(tk.Tk):
         else:
             self.btn_notif.config(text="Notifications : OFF",
                                   bg="#999999", activebackground="#777777")
+
+    def _toggle_filtre_ligne(self):
+        self.filtre_ligne_actif = not self.filtre_ligne_actif
+        if self.filtre_ligne_actif:
+            self.btn_filtre_ligne.config(text="Filtre ligne : ON",
+                                         bg="#1D9E75", activebackground="#0F6E56")
+        else:
+            self.btn_filtre_ligne.config(text="Filtre ligne : OFF",
+                                         bg="#999999", activebackground="#777777")
 
     def _clear(self):
         if not messagebox.askyesno("Effacer", "Supprimer tous les passages ?"):

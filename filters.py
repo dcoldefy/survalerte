@@ -4,6 +4,50 @@ Filtrage des aéronefs et analyse réglementaire des infractions.
 
 import config
 
+# Types OACI des avions de transport commercial.
+# Si hexdb.io identifie un appareil dont le type N'EST PAS dans cette liste,
+# il est exclu de l'enregistrement.
+TRANSPORT_TYPES = {
+    # Airbus narrow
+    "A318", "A319", "A320", "A321",
+    # Airbus wide
+    "A332", "A333", "A338", "A339",
+    "A342", "A343", "A345", "A346",
+    "A359", "A35K",
+    "A388",
+    # A220 (ex C-Series Bombardier)
+    "BCS1", "BCS3",
+    # Boeing narrow (737 NG + MAX)
+    "B732", "B733", "B734", "B735", "B736", "B737", "B738", "B739",
+    "B37M", "B38M", "B39M",
+    # Boeing wide
+    "B744", "B748",
+    "B752", "B753",
+    "B762", "B763", "B764",
+    "B772", "B773", "B77L", "B77W",
+    "B778", "B779",
+    "B788", "B789", "B78X",
+    # Embraer commercial (E-Jets v1 + v2)
+    "E135", "E145", "E170", "E175", "E190", "E195", "E290", "E295",
+    # Bombardier CRJ régional
+    "CRJ2", "CRJ7", "CRJ9", "CRJX",
+    # ATR
+    "AT43", "AT45", "AT72", "AT75", "AT76",
+    # Fokker
+    "F70", "F100",
+    # Dash 8 (Q-Series)
+    "DH8A", "DH8B", "DH8C", "DH8D",
+    # McDonnell Douglas / Boeing MD
+    "MD11", "MD81", "MD82", "MD83", "MD88", "MD90",
+    # COMAC / Sukhoi
+    "C919", "SU95", "SU9B",
+}
+
+
+def est_transport_commercial(type_code):
+    """Retourne True si le code type OACI correspond à un avion de transport commercial."""
+    return (type_code or "").upper() in TRANSPORT_TYPES
+
 
 def est_avion_de_ligne(indicatif, vitesse_kmh, categorie=None):
     """
