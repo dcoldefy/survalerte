@@ -94,18 +94,21 @@ class RadarApp(tk.Tk):
             self.profil = profil
             self._afficher_profil()
             self._maj_coordonnees_profil()
+            self._appliquer_credentials_opensky()
         else:
             self._demander_profil(premier=True)
         self._demander_reglages()
 
     def _demander_reglages(self):
-        dlg = DialogueReglages(self, rayon=self.rayon_km.get())
+        dlg = DialogueReglages(self, rayon=self.rayon_km.get(), source=_config.SOURCE_ADS_B)
         self.wait_window(dlg)
         if dlg.result:
             self.rayon_km.set(dlg.result["rayon"])
             _config.ALT_MIN_LEGALE  = dlg.result["alt_min"]
             _config.HEURE_NUIT_DEB  = dlg.result["nuit_deb"]
             _config.HEURE_NUIT_FIN  = dlg.result["nuit_fin"]
+            _config.SOURCE_ADS_B    = dlg.result["source"]
+            self._maj_label_source()
             if hasattr(self, "_leg_alt_var"):
                 self._leg_alt_var.set(f"Altitude < {_config.ALT_MIN_LEGALE} m")
                 self._leg_nuit_var.set(f"Vol nocturne {_config.HEURE_NUIT_DEB}h-{_config.HEURE_NUIT_FIN}h")
@@ -149,8 +152,23 @@ class RadarApp(tk.Tk):
             self.profil = dlg.result
             self._afficher_profil()
             self._maj_coordonnees_profil()
+            self._appliquer_credentials_opensky()
         elif premier:
             self._demander_profil(premier=True)
+
+    def _appliquer_credentials_opensky(self):
+        if self.profil:
+            user = self.profil.get("opensky_user", "") or ""
+            pwd  = self.profil.get("opensky_pass", "") or ""
+            if user:
+                _config.OPENSKY_USER = user
+                _config.OPENSKY_PASS = pwd or None
+
+    def _maj_label_source(self):
+        src_lbl = "FlightRadar24" if _config.SOURCE_ADS_B == "flightradar24" else "OpenSky Network"
+        ville = (self.profil or {}).get("ville", "")
+        commune_txt = f"{ville}  |  " if ville else ""
+        self.lbl_commune.config(text=f"{commune_txt}{src_lbl}  |  ADS-B")
 
     def _afficher_profil(self):
         if self.profil:
@@ -161,8 +179,7 @@ class RadarApp(tk.Tk):
                 text=f"{p['prenom']} {p['nom']}{adresse_txt}, {cp_ville}")
             ville = p.get("ville", "")
             self.title(f"{APP_TITLE}{' - ' + ville if ville else ''}  {VERSION}")
-            commune_txt = f"{ville}  |  " if ville else ""
-            self.lbl_commune.config(text=f"{commune_txt}OpenSky Network  |  ADS-B")
+            self._maj_label_source()
 
     # ---- Construction de l'interface ----------------------------------------
 
@@ -438,33 +455,107 @@ class RadarApp(tk.Tk):
                     break
                 time.sleep(0.1)
 
+    def _fetch_opensky(self, lat, lon, delta):
+        """Interroge OpenSky. Retourne une liste de dicts normalisés."""
+        url = (f"https://opensky-network.org/api/states/all"
+               f"?lamin={lat-delta}&lomin={lon-delta}"
+               f"&lamax={lat+delta}&lomax={lon+delta}")
+        auth = (_config.OPENSKY_USER, _config.OPENSKY_PASS) if _config.OPENSKY_USER else None
+        resp = requests.get(url, auth=auth, timeout=15)
+        if resp.status_code == 429:
+            retry_after = resp.headers.get("X-Rate-Limit-Retry-After-Seconds")
+            if retry_after is not None:
+                try:
+                    secs = int(retry_after)
+                    h, m = divmod(secs // 60, 60)
+                    reset_time = datetime.fromtimestamp(time.time() + secs).strftime("%H:%M")
+                    duree = f"{h}h{m:02d}min" if h else f"{m} min"
+                    msg = (f"Quota OpenSky dépassé (429) — réinitialisation dans {duree} "
+                           f"(vers {reset_time}).")
+                except (ValueError, OSError):
+                    msg = "Quota OpenSky dépassé (429) — réessai au prochain scan."
+            else:
+                msg = "Quota OpenSky dépassé (429) — réessai au prochain scan."
+            self._set_status(msg, "#FFF8E1", "#BA7517")
+            return None
+        resp.raise_for_status()
+        raw = [s for s in (resp.json().get("states") or [])
+               if s[5] is not None and s[6] is not None]
+        states = []
+        for s in raw:
+            states.append({
+                "icao":      (s[0] or "").strip(),
+                "indicatif": (s[1] or "").strip() or "-",
+                "pays":      s[2] or "-",
+                "lat":       s[6],
+                "lon":       s[5],
+                "alt_m":     int(s[7])       if s[7]  is not None else None,
+                "alt_geo":   int(s[13])      if s[13] is not None else None,
+                "vitesse":   int(s[9] * 3.6) if s[9]  is not None else None,
+                "cap":       int(s[10])      if s[10] is not None else None,
+                "au_sol":    1 if s[8] else 0,
+                "categorie": s[16] if len(s) > 16 else None,
+            })
+        return states
+
+    def _fetch_flightradar24(self, lat, lon, rayon_km):
+        """Interroge FlightRadar24. Retourne une liste de dicts normalisés."""
+        from FlightRadar24 import FlightRadar24API
+        fr = FlightRadar24API()
+        bounds = fr.get_bounds_by_point(lat, lon, rayon_km * 1000)
+        flights = fr.get_flights(bounds=bounds)
+        states = []
+        for f in flights:
+            icao = (f.id or "").strip()
+            if not icao:
+                continue
+            alt_m   = int(f.altitude * 0.3048) if f.altitude else None
+            vitesse = int(f.ground_speed * 1.852) if f.ground_speed else None
+            states.append({
+                "icao":      icao,
+                "indicatif": (f.callsign or "").strip() or "-",
+                "pays":      "-",
+                "lat":       f.latitude,
+                "lon":       f.longitude,
+                "alt_m":     alt_m,
+                "alt_geo":   alt_m,
+                "vitesse":   vitesse,
+                "cap":       int(f.heading) if f.heading else None,
+                "au_sol":    1 if f.on_ground else 0,
+                "categorie": None,
+            })
+        return states
+
     def _do_scan(self):
         self.scan_count += 1
         self._set_status("Scan en cours...", "#E8F0FF", "#185FA5")
         try:
-            delta = max(self.rayon_km.get(), 1) / 111.0
+            rayon_km = max(self.rayon_km.get(), 1)
+            delta    = rayon_km / 111.0
             lat, lon = self.scan_lat, self.scan_lon
-            url = (f"https://opensky-network.org/api/states/all"
-                   f"?lamin={lat-delta}&lomin={lon-delta}"
-                   f"&lamax={lat+delta}&lomax={lon+delta}")
-            resp = requests.get(url, timeout=15)
-            resp.raise_for_status()
-            states = [s for s in (resp.json().get("states") or [])
-                      if s[5] is not None and s[6] is not None]
+            source   = _config.SOURCE_ADS_B
+
+            if source == "flightradar24":
+                states = self._fetch_flightradar24(lat, lon, rayon_km)
+            else:
+                states = self._fetch_opensky(lat, lon, delta)
+
+            if states is None:   # 429 déjà géré dans _fetch_opensky
+                return
+
             now = datetime.now(); now_ts = int(now.timestamp())
             date_s = now.strftime("%d/%m/%Y"); time_s = now.strftime("%H:%M:%S")
             added = 0; updated = 0; frozen = 0; filtres = 0; n_infr = 0
 
             for s in states:
-                icao = (s[0] or "").strip()
+                icao      = s["icao"]
                 if not icao:
                     continue
-
-                alt_m     = int(s[7])      if s[7] is not None else None
-                vitesse   = int(s[9] * 3.6) if s[9] is not None else None
-                indicatif = (s[1] or "").strip() or "-"
-                categorie = s[16] if len(s) > 16 else None
-                au_sol    = 1 if s[8] else 0
+                alt_m     = s["alt_m"]
+                vitesse   = s["vitesse"]
+                indicatif = s["indicatif"]
+                categorie = s["categorie"]
+                au_sol    = s["au_sol"]
 
                 if au_sol or not est_avion_de_ligne(indicatif, vitesse, categorie):
                     print(f"[FILTRE] {indicatif} ({icao}) — couche 1 : au_sol={au_sol}, vitesse={vitesse}, cat={categorie}")
@@ -485,28 +576,25 @@ class RadarApp(tk.Tk):
 
                 row = {"date": date_s, "heure": time_s, "timestamp": now_ts,
                        "icao24": icao, "indicatif": indicatif,
-                       "altitude_m": alt_m,
-                       "altitude_geo": int(s[13]) if s[13] is not None else None,
-                       "vitesse_kmh": vitesse,
-                       "cap_deg": int(s[10]) if s[10] is not None else None,
-                       "au_sol": au_sol, "pays": s[2] or "-",
-                       "lat": s[6], "lon": s[5], "infraction": msg_infr}
+                       "altitude_m":  alt_m,
+                       "altitude_geo": s["alt_geo"],
+                       "vitesse_kmh":  vitesse,
+                       "cap_deg":      s["cap"],
+                       "au_sol": au_sol, "pays": s["pays"],
+                       "lat": s["lat"], "lon": s["lon"], "infraction": msg_infr}
 
                 if icao in self.active_flights:
                     flight = self.active_flights[icao]
                     flight["last_seen"] = now_ts
                     if flight["has_infraction"]:
-                        # Infraction déjà constatée → figer les données
                         frozen += 1
                     else:
-                        # Mise à jour des données dynamiques
                         update_passage(flight["id"], row)
                         flight["has_infraction"] = bool(code_infr)
                         if code_infr:
                             n_infr += 1
                         updated += 1
                 else:
-                    # Nouveau vol
                     if code_infr:
                         n_infr += 1
                     db_id = save_passage(row)
@@ -525,14 +613,20 @@ class RadarApp(tk.Tk):
                        f"détectée{'s' if n_infr > 1 else ''} dans la zone surveillée.")
                 _envoyer_notification("SurvAlerte — Infraction détectée", msg)
 
+            src_lbl  = "FR24" if source == "flightradar24" else "OpenSky"
             infr_txt = f" · {n_infr} infraction(s)" if n_infr else ""
-            detail = (f"Scan #{self.scan_count} · {added} nouveau(x) · "
+            detail = (f"[{src_lbl}] Scan #{self.scan_count} · {added} nouveau(x) · "
                       f"{updated} mis à jour · {frozen} figé(s){infr_txt}")
             self.after(0, lambda d=detail: self.stat_vars["sTotalDetail"].set(d))
+            self._set_status(
+                f"[{src_lbl}] Scan #{self.scan_count} : {len(states)} détecté(s), "
+                f"{added} nouveau(x), {filtres} filtré(s){infr_txt}",
+                "#E8F8F0", "#0F6E56")
             self.after(0, lambda: self._refresh_table(load_all()))
             self.after(0, self._update_stats)
         except Exception as e:
-            self._set_status(f"Erreur : {e}", "#FFF0F0", "#A32D2D")
+            import traceback; traceback.print_exc()
+            self._set_status(f"Erreur scan : {e}", "#FFF0F0", "#A32D2D")
 
     # ---- Tableau et filtres -------------------------------------------------
 
@@ -677,4 +771,5 @@ class RadarApp(tk.Tk):
         self.after(1000, self._tick)
 
     def _set_status(self, txt, bg, fg):
-        pass
+        self.after(0, lambda: self.lbl_foot.config(
+            text=txt, fg=fg, bg="#EFEFED"))

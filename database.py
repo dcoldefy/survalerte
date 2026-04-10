@@ -25,9 +25,18 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS profil (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         nom TEXT, prenom TEXT, adresse TEXT,
-        code_postal TEXT, ville TEXT)""")
+        code_postal TEXT, ville TEXT,
+        opensky_user TEXT, opensky_pass TEXT)""")
     try:
         c.execute("ALTER TABLE profil ADD COLUMN code_postal TEXT")
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE profil ADD COLUMN opensky_user TEXT")
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE profil ADD COLUMN opensky_pass TEXT")
     except Exception:
         pass
     conn.commit()
@@ -38,26 +47,28 @@ def load_profil():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     try:
-        c.execute("SELECT nom, prenom, adresse, code_postal, ville FROM profil WHERE id=1")
+        c.execute("SELECT nom, prenom, adresse, code_postal, ville, opensky_user, opensky_pass FROM profil WHERE id=1")
         row = c.fetchone()
     except Exception:
         row = None
     conn.close()
     if row and row[0] and row[1] and row[4]:
         return {"nom": row[0], "prenom": row[1], "adresse": row[2] or "",
-                "code_postal": row[3] or "", "ville": row[4]}
+                "code_postal": row[3] or "", "ville": row[4],
+                "opensky_user": row[5] or "", "opensky_pass": row[6] or ""}
     return None
 
 
-def save_profil(nom, prenom, adresse, code_postal, ville):
+def save_profil(nom, prenom, adresse, code_postal, ville, opensky_user="", opensky_pass=""):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("""INSERT INTO profil (id,nom,prenom,adresse,code_postal,ville)
-        VALUES (1,?,?,?,?,?)
+    c.execute("""INSERT INTO profil (id,nom,prenom,adresse,code_postal,ville,opensky_user,opensky_pass)
+        VALUES (1,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET nom=excluded.nom, prenom=excluded.prenom,
         adresse=excluded.adresse, code_postal=excluded.code_postal,
-        ville=excluded.ville""",
-        (nom, prenom, adresse, code_postal, ville))
+        ville=excluded.ville, opensky_user=excluded.opensky_user,
+        opensky_pass=excluded.opensky_pass""",
+        (nom, prenom, adresse, code_postal, ville, opensky_user, opensky_pass))
     conn.commit()
     conn.close()
 

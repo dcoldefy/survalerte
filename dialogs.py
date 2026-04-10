@@ -124,13 +124,14 @@ class DialogueProfil(tk.Toplevel):
     def __init__(self, parent, profil=None, titre="Bienvenue"):
         super().__init__(parent)
         self.title(titre)
-        self.resizable(False, False)
+        self.resizable(True, True)
+        self.minsize(420, 520)
         self.grab_set()
         self.focus_force()
         self.result = None
         self.configure(bg="#F8F8F6")
         self.update_idletasks()
-        w, h = 460, 450
+        w, h = 480, 640
         x = parent.winfo_x() + (parent.winfo_width()  - w) // 2
         y = parent.winfo_y() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
@@ -205,6 +206,30 @@ class DialogueProfil(tk.Toplevel):
         tk.Label(form, text="* champs obligatoires - Entrez le code postal puis cliquez Rechercher",
                  font=("Segoe UI", 7), bg="#F8F8F6", fg="#aaa").pack(anchor="w", pady=(4, 0))
 
+        sep = tk.Frame(form, bg="#CCCCCC", height=1)
+        sep.pack(fill="x", pady=(12, 0))
+        tk.Label(form, text="Identifiants OpenSky Network (facultatif)",
+                 font=("Segoe UI", 9, "bold"), bg="#F8F8F6", fg="#185FA5").pack(anchor="w", pady=(6, 0))
+        tk.Label(form, text="Permet d'augmenter le quota de requêtes (compte gratuit sur opensky-network.org)",
+                 font=("Segoe UI", 7), bg="#F8F8F6", fg="#888").pack(anchor="w")
+
+        config_defaults = {"opensky_user": config.OPENSKY_USER or "",
+                           "opensky_pass": config.OPENSKY_PASS or ""}
+        for key, label in [("opensky_user", "Login OpenSky"), ("opensky_pass", "Mot de passe OpenSky")]:
+            tk.Label(form, text=label, font=("Segoe UI", 9),
+                     bg="#F8F8F6", fg="#444").pack(anchor="w", pady=(6, 1))
+            e = tk.Entry(form, font=("Segoe UI", 10), relief="flat",
+                         bg="#FFFFFF", fg="#1a1a1a",
+                         highlightthickness=1,
+                         highlightbackground="#CCCCCC",
+                         highlightcolor="#185FA5",
+                         show="*" if key == "opensky_pass" else "")
+            e.pack(fill="x", ipady=4)
+            val = (p.get(key, "") if p else "") or config_defaults[key]
+            if val:
+                e.insert(0, val)
+            self.champs[key] = e
+
         bf = tk.Frame(self, bg="#F8F8F6", padx=24, pady=10)
         bf.pack(fill="x", side="bottom")
         tk.Button(bf, text="Valider", command=self._valider,
@@ -278,9 +303,12 @@ class DialogueProfil(tk.Toplevel):
             messagebox.showwarning("Champs manquants",
                 "Merci de renseigner le code postal et de selectionner une commune.", parent=self)
             return
+        opensky_user = self.champs["opensky_user"].get().strip()
+        opensky_pass = self.champs["opensky_pass"].get().strip()
         self.result = {"prenom": prenom, "nom": nom, "adresse": adresse,
-                       "code_postal": cp, "ville": ville}
-        save_profil(nom, prenom, adresse, cp, ville)
+                       "code_postal": cp, "ville": ville,
+                       "opensky_user": opensky_user, "opensky_pass": opensky_pass}
+        save_profil(nom, prenom, adresse, cp, ville, opensky_user, opensky_pass)
         self.destroy()
 
 
@@ -373,7 +401,7 @@ class MenuContextuel(tk.Menu):
 
 class DialogueReglages(tk.Toplevel):
 
-    def __init__(self, parent, rayon=3):
+    def __init__(self, parent, rayon=3, source="flightradar24"):
         super().__init__(parent)
         self.title("Paramètres de surveillance")
         self.resizable(False, False)
@@ -382,13 +410,13 @@ class DialogueReglages(tk.Toplevel):
         self.result = None
         self.configure(bg="#F8F8F6")
         self.update_idletasks()
-        w, h = 440, 330
+        w, h = 440, 420
         x = parent.winfo_x() + (parent.winfo_width()  - w) // 2
         y = parent.winfo_y() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
-        self._build(rayon)
+        self._build(rayon, source)
 
-    def _build(self, rayon):
+    def _build(self, rayon, source):
         hdr = tk.Frame(self, bg="#1D9E75", pady=12, padx=20)
         hdr.pack(fill="x")
         tk.Label(hdr, text="Paramètres de surveillance",
@@ -416,6 +444,31 @@ class DialogueReglages(tk.Toplevel):
             spin.grid(row=row, column=1, sticky="w", padx=(16, 0), pady=8)
             setattr(self, attr, spin)
 
+        # Source de données ADS-B
+        sep = tk.Frame(form, bg="#DDDDDD", height=1)
+        sep.grid(row=len(labels), column=0, columnspan=2, sticky="ew", pady=(12, 4))
+
+        tk.Label(form, text="Source de données ADS-B :",
+                 font=("Segoe UI", 9, "bold"), bg="#F8F8F6", fg="#444").grid(
+                 row=len(labels)+1, column=0, columnspan=2, sticky="w", pady=(4, 2))
+
+        self.source_var = tk.StringVar(value=source)
+        src_frame = tk.Frame(form, bg="#F8F8F6")
+        src_frame.grid(row=len(labels)+2, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        for val, txt, sub in [
+            ("flightradar24", "FlightRadar24",  "Recommandé — sans limite de requêtes"),
+            ("opensky",       "OpenSky Network", "Compte requis — quota ~100 req/3h"),
+        ]:
+            rb_fr = tk.Frame(src_frame, bg="#F8F8F6")
+            rb_fr.pack(anchor="w", pady=2)
+            tk.Radiobutton(rb_fr, text=txt, variable=self.source_var, value=val,
+                           font=("Segoe UI", 9, "bold"),
+                           bg="#F8F8F6", fg="#1a1a1a",
+                           activebackground="#F8F8F6",
+                           cursor="hand2").pack(side="left")
+            tk.Label(rb_fr, text=f"  {sub}", font=("Segoe UI", 8),
+                     bg="#F8F8F6", fg="#888").pack(side="left")
+
         bf = tk.Frame(self, bg="#F8F8F6", padx=24, pady=10)
         bf.pack(fill="x", side="bottom")
         tk.Button(bf, text="Valider",
@@ -438,5 +491,6 @@ class DialogueReglages(tk.Toplevel):
                 "Veuillez entrer des valeurs numériques.", parent=self)
             return
         self.result = {"rayon": rayon, "alt_min": alt_min,
-                       "nuit_deb": nuit_deb, "nuit_fin": nuit_fin}
+                       "nuit_deb": nuit_deb, "nuit_fin": nuit_fin,
+                       "source": self.source_var.get()}
         self.destroy()

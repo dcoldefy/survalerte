@@ -4,6 +4,11 @@ Configuration globale — constantes, coordonnées, destinataires.
 
 import os
 
+# Identifiants OpenSky Network (compte gratuit sur opensky-network.org)
+# Laisser à None pour un accès anonyme (quota très limité)
+OPENSKY_USER   = "davidc@coldefy.com"
+OPENSKY_PASS   = "XC7VEura83Y_udL"
+
 APP_TITLE      = "Radar de Survol Aerien"
 VERSION        = "v2.0"
 LAT            = 48.9897
@@ -18,6 +23,8 @@ OPENSKY_URL    = (f"https://opensky-network.org/api/states/all"
                   f"&lamax={LAT+DELTA}&lomax={LON+DELTA}")
 GEO_API        = "https://geo.api.gouv.fr/communes?codePostal={cp}&fields=nom&format=json"
 GEO_API_CENTRE = "https://geo.api.gouv.fr/communes?codePostal={cp}&nom={nom}&fields=nom,centre&format=json"
+
+SOURCE_ADS_B   = "flightradar24"   # "opensky" ou "flightradar24"
 
 ALT_MIN_LEGALE = 1000
 HEURE_NUIT_DEB = 22
