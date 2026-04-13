@@ -117,7 +117,8 @@ def generer_plainte_pdf(profil, vol, destinataire, commune_survol=None):
         None,
         "Si une infraction était constatée, je souhaite que des sanctions soient prises contre les responsables.",
         None,
-        f"Pour information, il semblerait que le vol concerné soit le vol : {ref_vol}",
+        f"Pour information, il semblerait que le vol concerné soit le vol : {ref_vol}"
+         + (f" ({icao24})" if icao24 and icao24.strip() != ref_vol else "") + ",",
     ]
     for ligne in lignes:
         if ligne:
@@ -257,7 +258,8 @@ def generer_plainte_word(profil, vol, destinataire, commune_survol=None):
         None,
         "Si une infraction était constatée, je souhaite que des sanctions soient prises contre les responsables.",
         None,
-        f"Pour information, il semblerait que le vol concerné soit le vol : {ref_vol}",
+        f"Pour information, il semblerait que le vol concerné soit le vol : {ref_vol}"
+         + (f" ({icao24})" if icao24 and icao24.strip() != ref_vol else "") + ",",
     ]
     for ligne in lignes:
         if ligne:
