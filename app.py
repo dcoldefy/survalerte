@@ -391,12 +391,14 @@ class RadarApp(tk.Tk):
             return
         date = vals[0]; heure = vals[1]; icao24 = vals[3]; indicatif = vals[2]
         altitude_m = None
+        code = ""
         for r in self.rows_cache:
             if r[0] == date and r[1] == heure and r[3] == icao24:
                 altitude_m = r[5]
+                code = get_code(r[13]) if len(r) > 13 else ""
                 break
         vol = {"date": date, "heure": heure, "indicatif": indicatif,
-               "icao24": icao24, "altitude_m": altitude_m}
+               "icao24": icao24, "altitude_m": altitude_m, "code": code}
         menu = MenuContextuel(self, vol=vol, profil=self.profil)
         try:
             menu.tk_popup(event.x_root, event.y_root)
