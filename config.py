@@ -6,8 +6,8 @@ import os
 
 # Identifiants OpenSky Network (compte gratuit sur opensky-network.org)
 # Laisser à None pour un accès anonyme (quota très limité)
-OPENSKY_USER   = "davidc@coldefy.com"
-OPENSKY_PASS   = "XC7VEura83Y_udL"
+OPENSKY_USER   = ""   # Renseigner ici ou via variable d'environnement OPENSKY_USER
+OPENSKY_PASS   = ""   # Renseigner ici ou via variable d'environnement OPENSKY_PASS
 
 APP_TITLE      = "Radar de Survol Aerien"
 VERSION        = "v2.0"
